@@ -1,130 +1,192 @@
+"use client";
+
+import { useState, useRef, useEffect } from "react";
 import Navbar from "@/components/layout/Navbar";
+import Card from "@/components/ui/Card";
 import { 
-  Calendar, 
+  CalendarDays, 
   Search, 
   Plus, 
   PencilLine, 
-  CheckSquare, 
-  Baby,
-  User,
-  ChevronRight
+  PackageCheck, 
+  Baby
 } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { getBalitaList, Balita } from "@/components/ui/storage";
 
 export default function DashboardPage() {
+  const [searchTerm, setSearchTerm] = useState("");
+  const [isFocused, setIsFocused] = useState(false);
+  const [balitaList, setBalitaList] = useState<Balita[]>([]);
+  const router = useRouter();
+  const searchRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    setBalitaList(getBalitaList());
+  }, []);
+
+  const filteredSuggestions = balitaList.filter((b) =>
+    b.name.toLowerCase().includes(searchTerm.toLowerCase())
+  ).slice(0, 4);
+
+  const totalBalita = balitaList.length;
+  const belumHadir = balitaList.filter(b => b.absenStatus === "tidak").length;
+  const hadirBulanIni = balitaList.filter(b => b.absenStatus === "hadir").length;
+  const belumDiukurList = balitaList.filter(b => b.status === "Belum diukur");
+
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (searchRef.current && !searchRef.current.contains(event.target as Node)) {
+        setIsFocused(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
   return (
     <div className="min-h-screen bg-gray-50 font-sans text-black">
       <Navbar />
 
-      <main className="p-8 space-y-6">
+      <main className="p-4 sm:p-6 md:p-8 space-y-6 max-w-5xl mx-auto mt-2">
         
-        {/* HERO SECTION */}
-        <div className="bg-teal-600 rounded-2xl p-10 text-white shadow-lg relative overflow-hidden">
-          <div className="flex justify-between items-start mb-4 relative z-10">
+        <div className="bg-teal-600 rounded-3xl p-6 sm:p-8 md:p-10 text-white shadow-lg relative">
+          <div className="flex justify-between items-start mb-6 relative z-10">
             <div>
-              <p className="text-teal-100 text-sm opacity-90 text-[20px]">Halo, Kader 👋</p>
-              <h2 className="text-xl font-bold text-[20px]">Posyandu Sidorejo Kidul</h2>
+              <p className="text-teal-50 text-sm font-medium opacity-90 mb-1">Halo, Kader 👋</p>
+              <h2 className="text-xl sm:text-2xl font-bold">Posyandu Sidorejo Kidul</h2>
             </div>
-            <div className="bg-white/20 backdrop-blur-md px-3 py-1.5 rounded-xl flex items-center gap-2 text-xs font-medium">
-              <Calendar size={20} />
-              April 2026
+            <div className="bg-white/20 px-3 py-1.5 sm:px-4 sm:py-2 rounded-2xl flex items-center gap-2 text-xs font-bold tracking-wide">
+              <CalendarDays size={18} />
+              Mei 2026
             </div>
           </div>
 
-          <div className="relative z-10">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+          <div className="relative z-10" ref={searchRef}>
+            <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
             <input 
               type="text" 
               placeholder="Cari nama balita" 
-              className="w-full pl-10 pr-4 py-3 rounded-xl text-gray-800 focus:outline-none shadow-inner bg-white placeholder:text-gray-400"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              onFocus={() => setIsFocused(true)}
+              className="w-full pl-12 pr-6 py-3.5 rounded-2xl text-gray-800 focus:outline-none shadow-sm bg-white placeholder:text-gray-400 font-medium transition-all focus:ring-2 focus:ring-teal-200"
             />
-          </div>
 
-          {/* Decorative background circle */}
-          <div className="absolute -right-10 -top-10 w-40 h-40 bg-white/10 rounded-full blur-2xl"></div>
+            {isFocused && (
+              <div className="absolute top-full left-0 right-0 mt-2 bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden z-50 animate-in fade-in slide-in-from-top-2 duration-200">
+                <div className="p-2">
+                  {filteredSuggestions.length > 0 ? (
+                    filteredSuggestions.map((item) => (
+                      <button
+                        key={item.id}
+                        onClick={() => {
+                          setSearchTerm(item.name);
+                          setIsFocused(false);
+                          router.push(`/dashboard/cari?name=${item.name}`);
+                        }}
+                        className="w-full flex items-center gap-3 p-3 hover:bg-gray-50 rounded-xl transition-colors text-left group"
+                      >
+                        <div className="w-8 h-8 bg-gray-100 rounded-lg flex items-center justify-center text-gray-400 group-hover:bg-white group-hover:text-teal-500 transition-colors shrink-0">
+                          <Search size={14} />
+                        </div>
+                        <div>
+                          <p className="text-sm font-bold text-gray-800">{item.name}</p>
+                          <p className="text-[10px] text-gray-500 font-medium">{item.age}</p>
+                        </div>
+                      </button>
+                    ))
+                  ) : (
+                    <p className="p-4 text-center text-xs text-gray-400 font-medium">Nama tidak ditemukan...</p>
+                  )}
+                  
+                  <button 
+                    onClick={() => router.push("/dashboard/cari")}
+                    className="w-full p-3 mt-1 text-center text-xs font-bold text-teal-600 hover:bg-gray-50 rounded-xl border-t border-gray-50 transition-colors"
+                  >
+                    Lihat Semua Hasil
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
 
-        {/* STATS SECTION */}
-        <div className="grid grid-cols-3 gap-4">
-          <div className="bg-white p-4 rounded-2xl shadow-sm border border-gray-100">
-            <div className="flex items-center gap-2 mb-2">
-              <div className="w-3 h-3 bg-blue-500 rounded-full"></div>
-              <p className="text-xs text-gray-500 font-medium">Total balita</p>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <Card className="flex flex-col justify-between p-5 hover:border-blue-200 transition-colors shadow-sm">
+            <div className="flex items-center gap-2 mb-3">
+              <div className="w-2.5 h-2.5 bg-blue-500 rounded-full"></div>
+              <p className="text-sm text-gray-800">Total balita</p>
             </div>
-            <h3 className="text-2xl font-bold">58</h3>
-          </div>
+            <h3 className="text-3xl font-black text-gray-900">{totalBalita}</h3>
+          </Card>
           
-          <div className="bg-white p-4 rounded-2xl shadow-sm border border-gray-100">
-            <div className="flex items-center gap-2 mb-2">
-              <div className="w-3 h-3 bg-teal-400 rounded-full"></div>
-              <p className="text-xs text-gray-500 font-medium">Hadir Bulan Ini</p>
+          <Card className="flex flex-col justify-between p-5 hover:border-yellow-200 transition-colors shadow-sm">
+            <div className="flex items-center gap-2 mb-3">
+              <div className="w-2.5 h-2.5 bg-yellow-400 rounded-full"></div>
+              <p className="text-sm text-gray-800">Belum Hadir</p>
             </div>
-            <h3 className="text-2xl font-bold">32</h3>
-          </div>
+            <h3 className="text-3xl font-black text-gray-900">{belumHadir}</h3>
+          </Card>
 
-          <div className="bg-white p-4 rounded-2xl shadow-sm border border-gray-100">
-            <div className="flex items-center gap-2 mb-2">
-              <div className="w-3 h-3 bg-yellow-500 rounded-full"></div>
-              <p className="text-xs text-gray-500 font-medium">Belum Hadir</p>
+          <Card className="flex flex-col justify-between p-5 hover:border-teal-200 transition-colors shadow-sm">
+            <div className="flex items-center gap-2 mb-3">
+              <div className="w-2.5 h-2.5 bg-[#1fb999] rounded-full"></div>
+              <p className="text-sm text-gray-800">Hadir Bulan Ini</p>
             </div>
-            <h3 className="text-2xl font-bold">16</h3>
-          </div>
+            <h3 className="text-3xl font-black text-gray-900">{hadirBulanIni}</h3>
+          </Card>
         </div>
 
-        {/* QUICK ACTIONS */}
-        <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100">
-          <h4 className="text-sm font-bold mb-4">Aksi Cepat</h4>
-          <div className="grid grid-cols-3 gap-3 justify-items-center">
-            <button className="flex flex-col items-center gap-2 w-full">
-              <div className="w-20 h-20 bg-teal-50 rounded-xl flex items-center justify-center text-teal-600 mx-auto">
-                <Plus size={30} />
-              </div>
-              <p className="text-[12px] font-medium text-center leading-tight">Tambah<br/>Balita</p>
-            </button>
-            <button className="flex flex-col items-center gap-2 w-full">
-              <div className="w-20 h-20 bg-teal-50 rounded-xl flex items-center justify-center text-teal-600 mx-auto">
-                <PencilLine size={30} />
-              </div>
-              <p className="text-[12px] font-medium text-center leading-tight">Input<br/>Pengukuran</p>
-            </button>
-            <button className="flex flex-col items-center gap-2 w-full">
-              <div className="w-20 h-20 bg-teal-50 rounded-xl flex items-center justify-center text-teal-600 mx-auto">
-                <CheckSquare size={30} />
-              </div>
-              <p className="text-[12px] font-medium text-center leading-tight">Absen<br/>Bulanan</p>
-            </button>
+        <Card className="p-6 shadow-sm border border-gray-200">
+          <h4 className="text-lg font-bold text-black mb-5">Aksi Cepat</h4>
+          <div className="grid grid-cols-3 gap-4">
+            {[
+              { icon: Plus, label: "Tambah Balita", onClick: () => router.push("/dashboard/balita/tambah") },
+              { icon: PencilLine, label: "Input Pengukuran", onClick: () => router.push("/dashboard/cari") },
+              { icon: PackageCheck, label: "Absen Bulanan", onClick: () => router.push("/dashboard/absen") }
+            ].map((action, idx) => (
+              <button key={idx} onClick={action.onClick} className="group flex flex-col items-center justify-center gap-3 bg-[#f0fbf9] py-5 px-2 rounded-2xl transition-all duration-300 hover:bg-white hover:shadow-lg hover:shadow-teal-100 hover:-translate-y-1 hover:scale-[1.02] active:scale-95 border border-transparent hover:border-teal-100 cursor-pointer">
+                <div className="text-[#0d9488] transition-transform duration-300 group-hover:scale-110 group-hover:-rotate-3">
+                  <action.icon size={28} strokeWidth={2} />
+                </div>
+                <p className="text-xs sm:text-sm font-semibold text-center text-[#0d9488] transition-colors duration-300 group-hover:text-teal-900">
+                  {action.label}
+                </p>
+              </button>
+            ))}
           </div>
-        </div>
+        </Card>
 
-        {/* LIST SECTION */}
-        <div className="space-y-4">
+        <div className="space-y-4 pt-2">
           <div className="flex justify-between items-center px-1">
-            <h4 className="text-sm font-bold">Belum diukur bulan ini</h4>
-            <span className="text-xs text-gray-400">3 balita</span>
+            <h4 className="text-base font-bold text-black">Belum diukur bulan ini</h4>
+            <span className="text-sm font-medium text-gray-500">{belumDiukurList.length} balita</span>
           </div>
 
           <div className="space-y-3">
-            {[
-              { name: "Bagas Pratama", age: "8 bln", mom: "Ibu Rina", address: "RT 01 / RW 02", color: "bg-blue-50 text-blue-500" },
-              { name: "Elina Rahma", age: "5 bln", mom: "Ibu Dewi", address: "RT 03 / RW 02", color: "bg-pink-50 text-pink-500" },
-              { name: "Fajar Nugraha", age: "18 bln", mom: "Ibu Maya", address: "RT 05 / RW 02", color: "bg-blue-50 text-blue-500" }
-            ].map((item, idx) => (
-              <div key={idx} className="bg-white p-4 rounded-2xl flex items-center justify-between shadow-sm border border-gray-100">
-                <div className="flex items-center gap-3">
-                  <div className={`w-12 h-12 rounded-full flex items-center justify-center ${item.color}`}>
-                    <Baby size={24} />
+            {belumDiukurList.length > 0 ? (
+              belumDiukurList.map((item) => (
+                <Card key={item.id} onClick={() => router.push(`/dashboard/balita/${item.id}`)} className="p-4 flex items-center justify-between group cursor-pointer hover:border-gray-300 transition-all shadow-sm">
+                  <div className="flex items-center gap-4">
+                    <div className={`w-12 h-12 rounded-full flex items-center justify-center ${item.color} shrink-0`}>
+                      <Baby size={24} />
+                    </div>
+                    <div>
+                      <h5 className="text-sm font-bold text-black">{item.name}</h5>
+                      <p className="text-xs text-gray-700 mt-0.5">
+                        {item.age} • {item.mom} • {item.address}
+                      </p>
+                    </div>
                   </div>
-                  <div>
-                    <h5 className="text-sm font-bold">{item.name}</h5>
-                    <p className="text-[10px] text-gray-400">
-                      {item.age} • {item.mom} • {item.address}
-                    </p>
+                  <div className="bg-[#fff5ea] text-orange-600 px-3 py-1.5 rounded-full text-xs font-bold whitespace-nowrap">
+                    Belum diukur
                   </div>
-                </div>
-                <div className="bg-orange-50 text-orange-600 px-3 py-1.5 rounded-full text-[10px] font-bold">
-                  Belum diukur
-                </div>
-              </div>
-            ))}
+                </Card>
+              ))
+            ) : (
+              <p className="text-center py-6 text-xs text-gray-400 font-medium">Semua balita sudah diukur bulan ini! 🎉</p>
+            )}
           </div>
         </div>
 
