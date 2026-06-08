@@ -5,26 +5,91 @@ import { ArrowLeft, Baby, ChevronDown } from "lucide-react";
 import { useParams, useRouter } from "next/navigation";
 import Navbar from "@/components/layout/Navbar";
 import Card from "@/components/ui/Card";
-import { getBalitaList, saveBalitaList, Balita, Pengukuran } from "@/components/ui/storage";
+import { getBalitaById, addPengukuran } from "@/lib/api";
+import { Balita, Pengukuran } from "@/types";
+
+function calculateAgeInMonths(birthDate: string): number {
+  const birth = new Date(birthDate);
+  const now = new Date();
+  const diffYears = now.getFullYear() - birth.getFullYear();
+  const diffMonths = now.getMonth() - birth.getMonth();
+  return diffYears * 12 + diffMonths;
+}
+import { useToast } from "@/components/ui/Toast";
+
+const InputWithSuffix = ({ 
+  label, 
+  suffix, 
+  value, 
+  onChange, 
+  sublabel = "",
+  disabled = false,
+  placeholder = "0.0"
+}: { 
+  label: string, 
+  suffix: string, 
+  value: string, 
+  onChange: (val: string) => void, 
+  sublabel?: string,
+  disabled?: boolean,
+  placeholder?: string
+}) => (
+  <div className="space-y-1">
+    <div className="flex justify-between items-end">
+      <label className="text-xs font-bold text-black">{label}</label>
+      {sublabel && <span className="text-[9px] text-gray-400">{sublabel}</span>}
+    </div>
+    <div className={`relative flex rounded-xl border overflow-hidden transition-all shadow-sm ${
+      disabled 
+        ? "border-gray-100 bg-gray-50" 
+        : "border-gray-200 focus-within:ring-2 focus-within:ring-teal-500/20 focus-within:border-teal-500 bg-white"
+    }`}>
+      <input 
+        type="number" 
+        step="any"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={placeholder}
+        disabled={disabled}
+        className="w-full p-3.5 pr-12 text-sm text-black font-bold outline-none bg-transparent placeholder:text-gray-300 disabled:text-gray-400 disabled:cursor-not-allowed" 
+      />
+      <span className="absolute right-4 top-1/2 -translate-y-1/2 text-xs font-bold text-gray-400">{suffix}</span>
+    </div>
+  </div>
+);
 
 export default function UkurBalitaPage() {
   const params = useParams();
   const router = useRouter();
   const id = params.id as string;
   const [balita, setBalita] = useState<Balita | null>(null);
+  const { success, warning } = useToast();
+  const [ageInMonths, setAgeInMonths] = useState<number | null>(null);
 
   // Form states
   const [tinggi, setTinggi] = useState("");
   const [berat, setBerat] = useState("");
   const [lingkarKepala, setLingkarKepala] = useState("");
   const [lingkarLengan, setLingkarLengan] = useState("");
-  const [selectedMonth, setSelectedMonth] = useState("Juni");
+  const months = ["Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", "Agustus", "September", "Oktober", "November", "Desember"];
+  const currentMonthName = months[new Date().getMonth()];
+  const [selectedMonth, setSelectedMonth] = useState(currentMonthName);
 
   useEffect(() => {
-    const list = getBalitaList();
-    const found = list.find((b) => b.id === id);
-    setBalita(found || null);
+    getBalitaById(id).then((found) => {
+      setBalita(found);
+      if (found?.tglLahir) {
+        setAgeInMonths(calculateAgeInMonths(found.tglLahir));
+      }
+    });
   }, [id]);
+
+  // Clean lingkarLengan if child is 6 months or under
+  useEffect(() => {
+    if (ageInMonths !== null && ageInMonths <= 6) {
+      setLingkarLengan("");
+    }
+  }, [ageInMonths]);
 
   if (!balita) {
     return (
@@ -37,92 +102,33 @@ export default function UkurBalitaPage() {
     );
   }
 
-  const handleSave = () => {
-    if (!tinggi || !berat || !lingkarKepala || !lingkarLengan) {
-      alert("Harap isi semua data pengukuran!");
+  const handleSave = async () => {
+    const isOver6Months = ageInMonths !== null && ageInMonths > 6;
+    
+    if (!tinggi || !berat || !lingkarKepala || (isOver6Months && !lingkarLengan)) {
+      warning(isOver6Months ? "Harap isi semua data pengukuran!" : "Harap isi data panjang, berat, dan lingkar kepala!");
       return;
     }
 
-    const list = getBalitaList();
-    const index = list.findIndex(b => b.id === id);
-    if (index === -1) return;
+    // map month string to integer index
+    const bulanIndex = months.indexOf(selectedMonth) + 1;
+    const dbYear = new Date().getFullYear(); // e.g. 2026
 
-    // Map month string to standard abbreviation in database
-    const monthMap: Record<string, string> = {
-      "April": "Apr",
-      "Mei": "Mei",
-      "Juni": "Jun"
-    };
-    const dbMonth = monthMap[selectedMonth] || "Jun";
-    const dbYear = new Date().getFullYear().toString(); // e.g. "2026"
-
-    const newMeasurement: Pengukuran = {
-      bulan: dbMonth,
+    const newMeasurement: Omit<Pengukuran, 'id'> = {
+      bulan: bulanIndex,
       tahun: dbYear,
       beratBadan: parseFloat(berat),
       tinggiBadan: parseFloat(tinggi),
-      lingkarKepala: parseFloat(lingkarKepala),
-      lingkarLengan: parseFloat(lingkarLengan)
+      lingkarKepala: lingkarKepala ? parseFloat(lingkarKepala) : null,
+      lingkarLengan: lingkarLengan ? parseFloat(lingkarLengan) : null
     };
 
-    const currentBalita = list[index];
-    const existingHistory = currentBalita.riwayatPengukuran || [];
-    
-    // Check if measurement for this month & year already exists
-    const existingIndex = existingHistory.findIndex(p => p.bulan === dbMonth && p.tahun === dbYear);
-    
-    let updatedHistory = [...existingHistory];
-    if (existingIndex !== -1) {
-      // Overwrite existing record
-      updatedHistory[existingIndex] = newMeasurement;
-    } else {
-      // Append new record
-      updatedHistory.push(newMeasurement);
-    }
-
-    // Update balita in list
-    list[index] = {
-      ...currentBalita,
-      status: "Sudah diukur",
-      riwayatPengukuran: updatedHistory
-    };
-
-    saveBalitaList(list);
-    alert('Pengukuran berhasil disimpan!');
+    await addPengukuran(id, newMeasurement);
+    success('Pengukuran berhasil disimpan!');
     router.back();
   };
 
-  const InputWithSuffix = ({ 
-    label, 
-    suffix, 
-    value, 
-    onChange, 
-    sublabel = "" 
-  }: { 
-    label: string, 
-    suffix: string, 
-    value: string, 
-    onChange: (val: string) => void, 
-    sublabel?: string 
-  }) => (
-    <div className="space-y-1">
-      <div className="flex justify-between items-end">
-        <label className="text-xs font-bold text-black">{label}</label>
-        {sublabel && <span className="text-[9px] text-gray-400">{sublabel}</span>}
-      </div>
-      <div className="relative">
-        <input 
-          type="number" 
-          step="any"
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          placeholder="0.0"
-          className="w-full border border-gray-200 rounded-xl p-3.5 pr-12 text-sm text-black font-bold focus:outline-none focus:ring-1 focus:ring-teal-500 bg-white shadow-sm placeholder:text-gray-300" 
-        />
-        <span className="absolute right-4 top-1/2 -translate-y-1/2 text-xs font-bold text-gray-400">{suffix}</span>
-      </div>
-    </div>
-  );
+  const isLlaDisabled = ageInMonths !== null && ageInMonths <= 6;
 
   return (
     <div className="min-h-screen bg-gray-50 text-black font-sans pb-10">
@@ -137,13 +143,15 @@ export default function UkurBalitaPage() {
         </div>
 
         <Card className="p-5 bg-white border border-gray-100 shadow-sm rounded-xl flex items-center gap-4">
-          <div className={`w-12 h-12 rounded-full flex items-center justify-center ${balita.color} shrink-0`}>
+          <div className={`w-12 h-12 rounded-full flex items-center justify-center shrink-0 ${
+            balita.jenisKelamin === "PEREMPUAN" ? "bg-[#fce5f1] text-pink-500" : "bg-[#e5f5fd] text-sky-500"
+          }`}>
             <Baby size={24} />
           </div>
           <div>
-            <h5 className="text-sm font-bold text-black">{balita.name}</h5>
-            <p className="text-xs text-gray-700 mt-1">{balita.age} • {balita.gender}</p>
-            <p className="text-xs text-gray-700 mt-0.5">{balita.mom} • {balita.address}</p>
+            <h5 className="text-sm font-bold text-black">{balita.nama}</h5>
+            <p className="text-xs text-gray-700 mt-1">{balita.jenisKelamin === "PEREMPUAN" ? "Perempuan" : "Laki-laki"}</p>
+            <p className="text-xs text-gray-700 mt-0.5">{balita.namaWali} • {balita.alamat} RT {balita.rt}/RW {balita.rw}</p>
           </div>
         </Card>
 
@@ -155,9 +163,9 @@ export default function UkurBalitaPage() {
               onChange={(e) => setSelectedMonth(e.target.value)}
               className="w-full appearance-none bg-white border border-gray-200 rounded-xl p-4 text-sm text-black font-bold focus:outline-none focus:ring-1 focus:ring-teal-500 shadow-sm cursor-pointer"
             >
-              <option value="April">April</option>
-              <option value="Mei">Mei</option>
-              <option value="Juni">Juni</option>
+              {months.map((m) => (
+                <option key={m} value={m}>{m}</option>
+              ))}
             </select>
             <ChevronDown size={20} className="absolute right-4 top-1/2 -translate-y-1/2 text-black pointer-events-none" />
           </div>
@@ -168,7 +176,15 @@ export default function UkurBalitaPage() {
           <InputWithSuffix label="Panjang / Tinggi" suffix="cm" value={tinggi} onChange={setTinggi} />
           <InputWithSuffix label="Berat" suffix="kg" value={berat} onChange={setBerat} />
           <InputWithSuffix label="Lingkar Kepala" suffix="cm" value={lingkarKepala} onChange={setLingkarKepala} />
-          <InputWithSuffix label="Lingkar Lengan Atas" suffix="cm" value={lingkarLengan} onChange={setLingkarLengan} sublabel="Untuk balita usia > 6 bulan" />
+          <InputWithSuffix 
+            label="Lingkar Lengan Atas" 
+            suffix="cm" 
+            value={lingkarLengan} 
+            onChange={setLingkarLengan} 
+            sublabel="Untuk balita usia > 6 bulan" 
+            disabled={isLlaDisabled}
+            placeholder={isLlaDisabled ? "Tidak wajib (≤ 6 bulan)" : "0.0"}
+          />
         </div>
 
         <button 

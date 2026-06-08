@@ -11,6 +11,7 @@ import {
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
+import { logout } from "@/lib/api";
 
 interface SidebarProps {
   isOpen: boolean;
@@ -135,7 +136,11 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
           </div>
 
           <button 
-            onClick={() => router.push('/login')}
+            onClick={async () => {
+              await logout();
+              router.push('/login');
+              router.refresh();
+            }}
             className="flex items-center justify-center gap-3 w-full text-rose-600 font-bold text-sm hover:bg-rose-50 p-3 rounded-xl transition-colors group cursor-pointer active:scale-95"
           >
             <LogOut size={20} className="group-hover:-translate-x-1 transition-transform" />

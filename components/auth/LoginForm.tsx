@@ -5,8 +5,10 @@ import { Eye, EyeOff } from "lucide-react";
 import Button from "@/components/ui/Button";
 import Input from "@/components/ui/Input";
 
+import { login } from "@/lib/api";
+
 export default function LoginForm() {
-  const [email, setEmail] = useState("");
+  const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -19,14 +21,14 @@ export default function LoginForm() {
     setError("");
 
     try {
-      await new Promise((res) => setTimeout(res, 1000));
-
-      if (email !== "admin@posyandu.id" || password !== "123456") {
-        throw new Error("Email atau password salah");
+      const res = await login(identifier, password);
+      if (!res.success) {
+        throw new Error(res.error || "NIK/Username atau password salah");
       }
 
       console.log("LOGIN SUCCESS");
       router.push("/dashboard");
+      router.refresh();
     } catch (err: any) {
       setError(err.message);
     } finally {
@@ -37,12 +39,12 @@ export default function LoginForm() {
   return (
     <form onSubmit={handleSubmit} className="space-y-5">
       <Input
-        label="Username / Email"
+        label="NIK / Username"
         type="text"
-        placeholder="kader@posyandu.id"
-        value={email}
-        onChange={(e) => setEmail(e.target.value)}
-        autoComplete="email"
+        placeholder="Masukkan NIK atau username"
+        value={identifier}
+        onChange={(e) => setIdentifier(e.target.value)}
+        autoComplete="username"
       />
 
       <div className="relative">

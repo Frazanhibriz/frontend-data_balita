@@ -3,15 +3,16 @@
 import { useState, useEffect } from "react";
 import { 
   ArrowLeft, 
-  Sparkles, 
+  Calendar, 
   CheckCircle2, 
   ChevronRight, 
-  AlertCircle
+  AlertCircle,
+  Sparkles
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import Navbar from "@/components/layout/Navbar";
 import Card from "@/components/ui/Card";
-import { addBalita } from "@/components/ui/storage";
+import { createBalita } from "@/lib/api";
 
 export default function TambahBalitaPage() {
   const router = useRouter();
@@ -28,6 +29,8 @@ export default function TambahBalitaPage() {
     jenisKelamin: "Laki-laki", // Laki-laki | Perempuan
     anakKe: "",
     alamat: "",
+    rt: "",
+    rw: "",
 
     // Step 2: Data Wali
     namaWali: "",
@@ -117,6 +120,8 @@ export default function TambahBalitaPage() {
       newErrors.anakKe = "Anak ke- harus lebih besar dari 0";
     }
     if (!formData.alamat.trim()) newErrors.alamat = "Alamat wajib diisi";
+    if (!formData.rt.trim()) newErrors.rt = "RT wajib diisi";
+    if (!formData.rw.trim()) newErrors.rw = "RW wajib diisi";
     
     setErrors(newErrors);
 
@@ -129,6 +134,10 @@ export default function TambahBalitaPage() {
       document.getElementById("anakKe")?.focus();
     } else if (newErrors.alamat) {
       document.getElementById("alamat")?.focus();
+    } else if (newErrors.rt) {
+      document.getElementById("rt")?.focus();
+    } else if (newErrors.rw) {
+      document.getElementById("rw")?.focus();
     }
 
     return Object.keys(newErrors).length === 0;
@@ -272,7 +281,7 @@ export default function TambahBalitaPage() {
     }
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (step === 1) {
       handleNext();
@@ -280,13 +289,39 @@ export default function TambahBalitaPage() {
       handleNext();
     } else if (step === 3) {
       if (validateStep3()) {
-        addBalita({
-          name: formData.namaBalita,
-          age: ageInMonths !== null ? `${ageInMonths} bln` : "0 bln",
-          gender: formData.jenisKelamin,
-          mom: formData.namaWali,
-          address: formData.alamat,
+        const newBalita = await createBalita({
+          nama: formData.namaBalita,
+          nik: formData.nikBalita,
+          jenisKelamin: formData.jenisKelamin === "Laki-laki" ? "LAKI_LAKI" : "PEREMPUAN",
+          namaWali: formData.namaWali,
+          nikWali: formData.nikWali,
+          noWhatsapp: formData.whatsapp,
+          alamat: formData.alamat,
+          rt: formData.rt,
+          rw: formData.rw,
+          tglLahir: formData.tanggalLahir,
+          anakKe: parseInt(formData.anakKe),
+          beratLahir: parseFloat(formData.beratLahir),
+          panjangLahir: parseFloat(formData.panjangLahir),
+          lingkarKepalaLahir: formData.lingkarKepalaLahir ? parseFloat(formData.lingkarKepalaLahir) : null,
+          usiaKehamilan: formData.usiaKehamilan ? parseInt(formData.usiaKehamilan) : null,
         });
+
+        // Simpan pengukuran awal
+        // import { addPengukuran } ... already in lib/api if imported
+        // Wait, addPengukuran is not imported in this file. I need to add it to imports.
+        // We'll import it in another chunk.
+        const currentMonth = new Date().getMonth() + 1;
+        const currentYear = new Date().getFullYear();
+        await import("@/lib/api").then(api => api.addPengukuran(newBalita.id, {
+          bulan: currentMonth,
+          tahun: currentYear,
+          tinggiBadan: parseFloat(formData.panjangSekarang),
+          beratBadan: parseFloat(formData.beratSekarang),
+          lingkarKepala: parseFloat(formData.lingkarKepalaSekarang),
+          lingkarLengan: formData.lingkarLenganSekarang ? parseFloat(formData.lingkarLenganSekarang) : null,
+        }));
+        
         setShowSuccessModal(true);
       }
     }
@@ -461,28 +496,77 @@ export default function TambahBalitaPage() {
                 )}
               </div>
 
-              {/* Alamat / RT / RW */}
-              <div className="space-y-2">
-                <label htmlFor="alamat" className="block text-xs font-bold text-gray-700">
-                  Alamat / RT / RW<span className="text-red-500 ml-0.5">*</span>
-                </label>
-                <input 
-                  type="text" 
-                  id="alamat"
-                  placeholder="RT 00 / RW 00"
-                  value={formData.alamat}
-                  onChange={(e) => handleInputChange("alamat", e.target.value)}
-                  className={`w-full px-4 py-3 border rounded-xl outline-none text-sm text-black transition-all bg-white ${
-                    errors.alamat 
-                      ? "border-rose-400 focus:ring-2 focus:ring-rose-200" 
-                      : "border-gray-200 focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500"
-                  }`}
-                />
-                {errors.alamat && (
-                  <p className="text-[10px] text-rose-500 flex items-center gap-1 font-medium">
-                    <AlertCircle size={10} /> {errors.alamat}
-                  </p>
-                )}
+              {/* Alamat, RT, RW */}
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <label htmlFor="alamat" className="block text-xs font-bold text-gray-700">
+                    Alamat Lengkap<span className="text-red-500 ml-0.5">*</span>
+                  </label>
+                  <input 
+                    type="text" 
+                    id="alamat"
+                    placeholder="Contoh: Jl. Merdeka No. 1"
+                    value={formData.alamat}
+                    onChange={(e) => handleInputChange("alamat", e.target.value)}
+                    className={`w-full px-4 py-3 border rounded-xl outline-none text-sm text-black transition-all bg-white ${
+                      errors.alamat 
+                        ? "border-rose-400 focus:ring-2 focus:ring-rose-200" 
+                        : "border-gray-200 focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500"
+                    }`}
+                  />
+                  {errors.alamat && (
+                    <p className="text-[10px] text-rose-500 flex items-center gap-1 font-medium">
+                      <AlertCircle size={10} /> {errors.alamat}
+                    </p>
+                  )}
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <label htmlFor="rt" className="block text-xs font-bold text-gray-700">
+                      RT<span className="text-red-500 ml-0.5">*</span>
+                    </label>
+                    <input 
+                      type="text" 
+                      id="rt"
+                      placeholder="001"
+                      value={formData.rt}
+                      onChange={(e) => handleInputChange("rt", e.target.value.replace(/\D/g, '').substring(0, 3))}
+                      className={`w-full px-4 py-3 border rounded-xl outline-none text-sm text-black transition-all bg-white ${
+                        errors.rt 
+                          ? "border-rose-400 focus:ring-2 focus:ring-rose-200" 
+                          : "border-gray-200 focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500"
+                      }`}
+                    />
+                    {errors.rt && (
+                      <p className="text-[10px] text-rose-500 flex items-center gap-1 font-medium">
+                        <AlertCircle size={10} /> {errors.rt}
+                      </p>
+                    )}
+                  </div>
+                  <div className="space-y-2">
+                    <label htmlFor="rw" className="block text-xs font-bold text-gray-700">
+                      RW<span className="text-red-500 ml-0.5">*</span>
+                    </label>
+                    <input 
+                      type="text" 
+                      id="rw"
+                      placeholder="002"
+                      value={formData.rw}
+                      onChange={(e) => handleInputChange("rw", e.target.value.replace(/\D/g, '').substring(0, 3))}
+                      className={`w-full px-4 py-3 border rounded-xl outline-none text-sm text-black transition-all bg-white ${
+                        errors.rw 
+                          ? "border-rose-400 focus:ring-2 focus:ring-rose-200" 
+                          : "border-gray-200 focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500"
+                      }`}
+                    />
+                    {errors.rw && (
+                      <p className="text-[10px] text-rose-500 flex items-center gap-1 font-medium">
+                        <AlertCircle size={10} /> {errors.rw}
+                      </p>
+                    )}
+                  </div>
+                </div>
               </div>
             </Card>
           )}
@@ -613,17 +697,17 @@ export default function TambahBalitaPage() {
               {/* Dynamic Age Badge */}
               <div className="bg-[#f0fbf9] border border-[#1fb999]/20 p-3.5 rounded-xl flex items-center gap-3">
                 <div className="w-8 h-8 rounded-full bg-[#b8f5e6]/70 flex items-center justify-center text-teal-700 shrink-0">
-                  <Sparkles size={16} />
+                  <Calendar size={16} />
                 </div>
                 <div className="text-xs">
                   <span className="font-bold text-teal-800">
                     Usia:{" "}
                     {ageInMonths !== null ? (
-                      <span className="font-black text-sm bg-teal-100 text-teal-900 px-2 py-0.5 rounded-md animate-pulse">
+                      <span className="font-black text-sm bg-teal-100 text-teal-900 px-2 py-0.5 rounded-md">
                         {ageInMonths} bulan
                       </span>
                     ) : (
-                      "NaN bulan"
+                      <span className="text-gray-400 font-medium">Pilih tanggal lahir dulu</span>
                     )}
                   </span>
                 </div>
@@ -822,15 +906,25 @@ export default function TambahBalitaPage() {
                     <label htmlFor="lingkarLenganSekarang" className="block text-xs font-bold text-gray-700">
                       Lingkar lengan{ageInMonths !== null && ageInMonths > 6 ? <span className="text-red-500 ml-0.5">*</span> : ""}
                     </label>
-                    <div className="relative flex rounded-xl border border-gray-200 overflow-hidden focus-within:ring-2 focus-within:ring-teal-500/20 focus-within:border-teal-500 transition-all bg-white shadow-sm">
+                    <div className={`relative flex rounded-xl border overflow-hidden transition-all shadow-sm ${
+                      ageInMonths !== null && ageInMonths > 6
+                        ? "border-gray-200 focus-within:ring-2 focus-within:ring-teal-500/20 focus-within:border-teal-500 bg-white"
+                        : "border-gray-100 bg-gray-50"
+                    }`}>
                       <input 
                         type="number" 
                         id="lingkarLenganSekarang"
                         step="0.1"
-                        placeholder={ageInMonths !== null && ageInMonths <= 6 ? "Tidak wajib (≤ 6 bulan)" : "0.0"}
+                        placeholder={
+                          ageInMonths === null
+                            ? "Isi tanggal lahir dulu"
+                            : ageInMonths <= 6
+                            ? "Tidak wajib (≤ 6 bulan)"
+                            : "0.0"
+                        }
                         value={formData.lingkarLenganSekarang}
                         onChange={(e) => handleInputChange("lingkarLenganSekarang", e.target.value)}
-                        disabled={ageInMonths !== null && ageInMonths <= 6}
+                        disabled={ageInMonths === null || ageInMonths <= 6}
                         className="flex-1 px-3 py-3 outline-none text-sm text-black disabled:bg-gray-50 disabled:text-gray-400 disabled:cursor-not-allowed"
                       />
                       <div className="px-3 bg-gray-50 border-l border-gray-200 flex items-center justify-center text-xs font-bold text-gray-500 select-none">

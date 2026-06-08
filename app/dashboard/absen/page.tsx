@@ -5,13 +5,15 @@ import { Search, ChevronDown, Baby, ArrowLeft } from "lucide-react";
 import { useRouter } from "next/navigation";
 import Navbar from "@/components/layout/Navbar";
 import Card from "@/components/ui/Card";
-import { getBalitaList, Balita, updateBalita } from "@/components/ui/storage";
+import { getBalitaList, getAbsensiList, bulkUpdateAbsensi } from "@/lib/api";
+import { Balita, Absensi } from "@/types";
 
 export default function AbsenBalitaPage() {
   const router = useRouter();
   const [filter, setFilter] = useState("Semua");
   const [searchTerm, setSearchTerm] = useState("");
-  const [absenData, setAbsenData] = useState<Balita[]>([]);
+  const [balitaList, setBalitaList] = useState<Balita[]>([]);
+  const [absenData, setAbsenData] = useState<Absensi[]>([]);
 
   const months = ["Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Ags", "Sep", "Okt", "Nov", "Des"];
   
@@ -27,24 +29,52 @@ export default function AbsenBalitaPage() {
   const [selectedYear, setSelectedYear] = useState(currentYear.toString());
 
   useEffect(() => {
-    setAbsenData(getBalitaList());
+    getBalitaList().then(setBalitaList).catch(console.error);
   }, []);
 
-  const handleStatusChange = (id: string, newStatus: "hadir" | "tidak") => {
-    updateBalita(id, { absenStatus: newStatus });
-    setAbsenData(getBalitaList());
+  useEffect(() => {
+    const bulanIndex = months.indexOf(selectedMonth) + 1;
+    getAbsensiList(bulanIndex, parseInt(selectedYear)).then(setAbsenData).catch(console.error);
+  }, [selectedMonth, selectedYear]);
+
+  const handleStatusChange = async (id: string, newStatus: "hadir" | "tidak") => {
+    const isHadir = newStatus === "hadir";
+    const bulanIndex = months.indexOf(selectedMonth) + 1;
+    const tahunInt = parseInt(selectedYear);
+
+    // Optimistic update
+    setAbsenData(prev => {
+      const existing = prev.find(a => a.balitaId === id);
+      if (existing) {
+        return prev.map(a => a.balitaId === id ? { ...a, isHadir } : a);
+      } else {
+        return [...prev, { balitaId: id, isHadir, bulan: bulanIndex, tahun: tahunInt }];
+      }
+    });
+
+    try {
+      await bulkUpdateAbsensi([{ balitaId: id, isHadir, bulan: bulanIndex, tahun: tahunInt }]);
+    } catch (err) {
+      // Revert if API call fails
+      const list = await getAbsensiList(bulanIndex, tahunInt);
+      setAbsenData(list);
+    }
   };
 
-  const filteredData = absenData.filter(item => {
-    if (filter === "Sudah hadir" && item.absenStatus !== "hadir") return false;
-    if (filter === "Belum hadir" && item.absenStatus !== "tidak") return false;
-    return item.name.toLowerCase().includes(searchTerm.toLowerCase());
+  const filteredData = balitaList.filter(item => {
+    const absen = absenData.find(a => a.balitaId === item.id);
+    const currentStatus = absen ? (absen.isHadir ? "hadir" : "tidak") : "tidak"; // default "tidak" if no record? or maybe leave as "belum dicatat"?
+    // If we assume default is "tidak" or just missing
+    // Let's say if no record, they are not present.
+    if (filter === "Sudah hadir" && currentStatus !== "hadir") return false;
+    if (filter === "Belum hadir" && currentStatus !== "tidak") return false;
+    return item.nama.toLowerCase().includes(searchTerm.toLowerCase());
   });
 
   return (
     <div className="min-h-screen bg-gray-50 text-black font-sans pb-10">
       <Navbar title="Absen Balita" />
-      <main className="p-4 sm:p-6 max-w-2xl mx-auto space-y-6 mt-2">
+      <main className="p-4 sm:p-6 max-w-5xl mx-auto space-y-6 mt-2">
         
         <div className="flex items-center justify-between relative h-10 mb-4">
           <button onClick={() => router.back()} className="w-10 h-10 rounded-full border border-gray-200 flex items-center justify-center hover:bg-gray-100 transition-colors bg-white shadow-sm z-10 active:scale-95">
@@ -126,24 +156,26 @@ export default function AbsenBalitaPage() {
           ))}
         </div>
 
-        <div className="space-y-3">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {filteredData.length > 0 ? (
             filteredData.map((balita) => (
               <Card key={balita.id} className="p-4 flex flex-wrap sm:flex-nowrap items-center justify-between bg-white border border-gray-100 shadow-sm rounded-xl gap-4">
                 <div className="flex items-center gap-3">
-                  <div className={`w-10 h-10 rounded-full flex items-center justify-center ${balita.color} shrink-0`}>
+                  <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 ${
+                    balita.jenisKelamin === "PEREMPUAN" ? "bg-[#fce5f1] text-pink-500" : "bg-[#e5f5fd] text-sky-500"
+                  }`}>
                     <Baby size={20} />
                   </div>
                   <div>
-                    <h5 className="text-sm font-bold text-black">{balita.name}</h5>
-                    <p className="text-[11px] text-gray-500 mt-0.5">{balita.age} • {balita.address}</p>
+                    <h5 className="text-sm font-bold text-black">{balita.nama}</h5>
+                    <p className="text-[11px] text-gray-500 mt-0.5">{balita.jenisKelamin === "PEREMPUAN" ? "Perempuan" : "Laki-laki"} • {balita.alamat} RT {balita.rt}</p>
                   </div>
                 </div>
                 <div className="flex items-center gap-2 ml-auto w-full sm:w-auto mt-2 sm:mt-0">
                   <button 
                     onClick={() => handleStatusChange(balita.id, "hadir")}
                     className={`flex-1 sm:flex-none px-6 py-2 rounded-xl text-xs font-bold transition-all active:scale-95 ${
-                      balita.absenStatus === "hadir" 
+                      absenData.find(a => a.balitaId === balita.id)?.isHadir 
                         ? "bg-[#22c55e] text-white shadow-sm shadow-green-100" 
                         : "bg-gray-100 text-gray-700 hover:bg-gray-200"
                     }`}
@@ -153,7 +185,7 @@ export default function AbsenBalitaPage() {
                   <button 
                     onClick={() => handleStatusChange(balita.id, "tidak")}
                     className={`flex-1 sm:flex-none px-6 py-2 rounded-xl text-xs font-bold transition-all active:scale-95 ${
-                      balita.absenStatus === "tidak" 
+                      absenData.find(a => a.balitaId === balita.id) && !absenData.find(a => a.balitaId === balita.id)?.isHadir
                         ? "bg-[#ffe4e6] text-[#e11d48] shadow-sm shadow-rose-100" 
                         : "bg-gray-100 text-gray-700 hover:bg-gray-200"
                     }`}

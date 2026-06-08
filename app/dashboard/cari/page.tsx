@@ -6,7 +6,8 @@ import Link from "next/link";
 import { useSearchParams, useRouter } from "next/navigation";
 import Navbar from "@/components/layout/Navbar";
 import Card from "@/components/ui/Card";
-import { getBalitaList, Balita } from "@/components/ui/storage";
+import { getBalitaList } from "@/lib/api";
+import { Balita } from "@/types";
 
 function CariBalitaContent() {
   const searchParams = useSearchParams();
@@ -15,7 +16,7 @@ function CariBalitaContent() {
   const [balitaList, setBalitaList] = useState<Balita[]>([]);
 
   useEffect(() => {
-    setBalitaList(getBalitaList());
+    getBalitaList().then(setBalitaList);
   }, []);
 
   useEffect(() => {
@@ -26,7 +27,7 @@ function CariBalitaContent() {
   }, [searchParams]);
 
   const filteredData = balitaList.filter((balita) =>
-    balita.name.toLowerCase().includes(searchTerm.toLowerCase())
+    balita.nama.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   return (
@@ -61,16 +62,18 @@ function CariBalitaContent() {
                 onClick={() => router.push(`/dashboard/balita/${balita.id}`)}
                 className="p-5 flex items-center gap-4 cursor-pointer hover:border-gray-300 transition-all border border-gray-100 shadow-sm rounded-xl bg-white"
               >
-                <div className={`w-12 h-12 rounded-full flex items-center justify-center ${balita.color} shrink-0`}>
+                <div className={`w-12 h-12 rounded-full flex items-center justify-center shrink-0 ${
+                  balita.jenisKelamin === "PEREMPUAN" ? "bg-[#fce5f1] text-pink-500" : "bg-[#e5f5fd] text-sky-500"
+                }`}>
                   <Baby size={24} />
                 </div>
                 <div>
-                  <h5 className="text-sm font-bold text-black">{balita.name}</h5>
+                  <h5 className="text-sm font-bold text-black">{balita.nama}</h5>
                   <p className="text-xs text-gray-700 mt-1">
-                    {balita.age} • {balita.gender}
+                    {balita.jenisKelamin === "PEREMPUAN" ? "Perempuan" : "Laki-laki"}
                   </p>
                   <p className="text-xs text-gray-700 mt-0.5">
-                    {balita.mom} • {balita.address}
+                    {balita.namaWali} • {balita.alamat} RT {balita.rt}/RW {balita.rw}
                   </p>
                 </div>
               </Card>
