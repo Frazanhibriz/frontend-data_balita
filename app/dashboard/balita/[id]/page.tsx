@@ -81,7 +81,7 @@ const GrafikPertumbuhan = ({
   return (
     <div className="w-full mt-6 pb-2">
       <div className="w-full h-[220px] relative">
-        <ResponsiveContainer width="100%" height="100%">
+        <ResponsiveContainer width="100%" height="100%" minWidth={1} minHeight={1}>
           <LineChart
             data={chartData}
             margin={{ top: 15, right: 15, left: -20, bottom: 5 }}
